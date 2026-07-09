@@ -1,0 +1,30 @@
+/* カレンダー予定を押した時のポップアップを横に広げる */
+.MuiDialog-paper,
+div[role="dialog"] {
+  width: 92vw !important;
+  max-width: 92vw !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* ポップアップ内の入力欄の幅制限を外す */
+.MuiDialog-paper .MuiFormControl-root,
+.MuiDialog-paper .MuiTextField-root,
+div[role="dialog"] .MuiFormControl-root,
+div[role="dialog"] .MuiTextField-root {
+  max-width: none !important;
+}
+
+/* 一番上のイベントタイトル欄を広げる */
+.MuiDialog-paper .MuiFormControl-root:first-of-type,
+.MuiDialog-paper .MuiTextField-root:first-of-type,
+div[role="dialog"] .MuiFormControl-root:first-of-type,
+div[role="dialog"] .MuiTextField-root:first-of-type {
+  width: calc(92vw - 50px) !important;
+}
+
+/* 入力欄の中身も横幅いっぱい使う */
+.MuiDialog-paper input,
+div[role="dialog"] input {
+  min-width: 0 !important;
+}
