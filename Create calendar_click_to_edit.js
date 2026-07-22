@@ -1,18 +1,12 @@
 (function () {
   'use strict';
 
-  // 予定をタップした時に「編集画面」へ直接飛ばすカスタマイズ
-  // PC・モバイル両対応
-
-  var BOUND = false;
-
-  function isMobilePath() {
+  function isMobile() {
     return location.pathname.indexOf('/k/m/') === 0;
   }
-
   function getAppId() {
     try {
-      if (isMobilePath() && kintone.mobile && kintone.mobile.app) {
+      if (isMobile() && kintone.mobile && kintone.mobile.app) {
         return kintone.mobile.app.getId();
       }
       if (kintone.app && kintone.app.getId) {
@@ -21,75 +15,82 @@
     } catch (e) {}
     return null;
   }
-
-  function goToEdit(recordId) {
+  function goEdit(recordId) {
     var appId = getAppId();
-    if (!appId || !recordId) {
-      return;
-    }
-    var base = isMobilePath() ? '/k/m/' : '/k/';
+    if (!appId || !recordId) return;
+    var base = isMobile() ? '/k/m/' : '/k/';
     location.href =
       location.origin + base + appId + '/show#record=' + recordId + '&mode=edit';
   }
-
-  // カレンダー上の各予定要素を監視し、クリックをフックする
-  function hookCalendarClicks() {
-    document.addEventListener(
-      'click',
-      function (e) {
-        var el = e.target;
-        if (!el) return;
-
-        // fullcalendar系の予定要素を辿る
-        var eventEl = el.closest
-          ? el.closest('.fc-event, .fc-daygrid-event, .fc-timegrid-event, a.fc-event')
-          : null;
-
-        if (!eventEl) return;
-
-        // data 属性 or href からレコードIDを抽出
-        var recordId = null;
-
-        // 1) data-record-id
-        if (eventEl.dataset && eventEl.dataset.recordId) {
-          recordId = eventEl.dataset.recordId;
-        }
-
-        // 2) href="....#record=123"
-        if (!recordId) {
-          var href = eventEl.getAttribute && eventEl.getAttribute('href');
-          if (href) {
-            var m = href.match(/record=(\d+)/);
-            if (m) recordId = m[1];
+  // e.target から祖先方向に record id を探索
+  function findRecordId(el) {
+    var cur = el;
+    while (cur && cur !== document.documentElement) {
+      if (cur.dataset) {
+        if (cur.dataset.recordId) return cur.dataset.recordId;
+        if (cur.dataset.eventId)  return cur.dataset.eventId;
+        if (cur.dataset.id)       return cur.dataset.id;
+        for (var k in cur.dataset) {
+          if (/record[_-]?id|^id$/i.test(k) && cur.dataset[k]) {
+            return cur.dataset[k];
           }
         }
-
-        // 3) 子要素の data 属性を探す
-        if (!recordId) {
-          var withData = eventEl.querySelector && eventEl.querySelector('[data-record-id]');
-          if (withData) recordId = withData.getAttribute('data-record-id');
+      }
+      var href = cur.getAttribute && cur.getAttribute('href');
+      if (href) {
+        var m = href.match(/record=(\d+)/);
+        if (m) return m[1];
+      }
+      var oc = cur.getAttribute && cur.getAttribute('onclick');
+      if (oc) {
+        var m2 = oc.match(/record=(\d+)/);
+        if (m2) return m2[1];
+      }
+      // 子要素を最後に一応見る
+      if (cur.querySelector) {
+        var child = cur.querySelector('[data-record-id],[data-event-id]');
+        if (child && child.dataset) {
+          if (child.dataset.recordId) return child.dataset.recordId;
+          if (child.dataset.eventId)  return child.dataset.eventId;
         }
-
-        if (!recordId) return;
-
-        // 標準の遷移を止めて編集画面へ
-        e.preventDefault();
-        e.stopPropagation();
-        goToEdit(recordId);
-      },
-      true
-    );
-
-    BOUND = true;
+      }
+      cur = cur.parentNode;
+    }
+    return null;
   }
 
+  // (A) ページ全体のクリックを capture で先取り
+  document.addEventListener(
+    'click',
+    function (e) {
+      var recId = findRecordId(e.target);
+      if (!recId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      goEdit(recId);
+    },
+    true
+  );
+
+  // (B) 動的に出てくる詳細ポップアップの編集リンクURLを補正
+  var observer = new MutationObserver(function () {
+    var nodes = document.querySelectorAll(
+      'a[href*="/show#record="]:not([data-edit-ok])'
+    );
+    for (var i = 0; i < nodes.length; i++) {
+      var a = nodes[i];
+      var h = a.getAttribute('href');
+      if (!h || h.indexOf('mode=edit') >= 0) continue;
+      a.setAttribute('href', h + '&mode=edit');
+      a.setAttribute('data-edit-ok', '1');
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  // kintone 標準イベント（ダミー、PC/sp両対応）
   kintone.events.on(
     ['app.record.index.show', 'mobile.app.record.index.show'],
-    function (event) {
-      if (!BOUND) {
-        hookCalendarClicks();
-      }
-      return event;
-    }
+    function (e) { return e; }
   );
 })();
